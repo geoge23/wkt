@@ -19,18 +19,14 @@ app.post('/auth/login', express.json(), async (req, res) => {
     try {
         const {jwt, doc} = await am.performAuth(username, password)
         if (!doc.meta.usedWkt) {
-            const newWktDoc: wktUserInterface = {
+            const newWktDoc = {
                 userId: doc._id!,
-                workoutList: [],
-                lastWorkout: {
-                    day: '0-0-0000',
-                    type: 'null'
-                },
-                workouts: {},
-                data: {}
+                workoutList: []
             } 
             const newWktUser = new wktUser(newWktDoc)
-            console.log(newWktUser, await newWktUser.save())
+            newWktUser.markModified('lastWorkout')
+            console.log(newWktDoc)
+            await newWktUser.save()
             am.setMeta(doc._id!, 'usedWkt', true)
         }
         res.status(200).send({
@@ -52,6 +48,10 @@ app.post('/auth/login', express.json(), async (req, res) => {
         }
     }
 })
+app.get('/auth/test', am.authMiddleware, async (req, res) => {
+    const wktDoc = await wktUser.findOne({userId: req.user._id!})
+    res.status(200).send({status: 'success', data: wktDoc})
+})
 
 app.get('/workout', am.authMiddleware, async (req, res) => {
     const id = req.user._id!;
@@ -68,7 +68,7 @@ app.get('/workout', am.authMiddleware, async (req, res) => {
         todaysWorkout: '',
         workouts: wktDoc!.workouts
     }
-    if (wktDoc!.lastWorkout.day == todaysDate) {
+    if (wktDoc!.lastWorkout.date == todaysDate) {
         returnDoc.todaysWorkout = wktDoc!.lastWorkout.type
     } else if (!(wktDoc!.lastWorkout.type)) {
         returnDoc.todaysWorkout = wktDoc!.workoutList[0]
@@ -160,27 +160,41 @@ app.delete('/workout/machine', am.authMiddleware, express.json(), async (req, re
     }
 })
 
-//TODO: Fix this
 app.post('/action', am.authMiddleware, express.json(), async (req, res) => {
     try {
         const {workout, machine, weight, reps, set}: {workout: string, machine: string, weight: number, reps: number, set: number} = req.body;
         const wktDoc = await wktUser.findOne({userId: req.user._id!})
+        if (wktDoc == null) {throw new Error('Workout Doc not found. Please set "usedWkt" to false on the user\'s meta object in MongoDB')}
         const todaysDate = moment().format('M-D-YYYY')
-        console.log(todaysDate)
-        if (wktDoc!.lastWorkout.day != todaysDate) {
-            wktDoc!.updateOne({"$set": {"lastWorkout.day": todaysDate, "lastWorkout.type": workout}}).then(e => console.log(e))
-        }
-        wktDoc!.updateOne({"$addToSet": {
-            [`data.${machine}`]: {
-                weight,
-                reps,
-                set,
-                date: moment().unix()
+        if (!wktDoc!.lastWorkout.date || wktDoc!.lastWorkout.date != todaysDate) {
+            wktDoc.lastWorkout = {
+                date: todaysDate,
+                type: workout
             }
-        }})
+            await wktDoc.save()
+        }
+        if (!wktDoc.data) {
+            wktDoc.data = {}
+            await wktDoc.save()
+        }
+        const newMachineData = {
+            weight,
+            reps,
+            set,
+            date: moment().unix()
+        }
+        if (!wktDoc.data[machine]) {
+            await wktDoc.updateOne({$set: {
+                [`data.${machine}`]: [newMachineData]
+            }})
+        } else {
+            await wktDoc.updateOne({$addToSet: {
+                [`data.${machine}`]: newMachineData
+            }})
+        }
         res.status(200).send({status: 'success'})
     } catch (e) {
-        res.status(500).send({status:'error',reason:e})
+        res.status(500).send({status:'error',reason:e.toString()})
     }
 })
 
