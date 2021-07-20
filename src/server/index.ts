@@ -1,5 +1,6 @@
 import express from 'express'
 import Mongoose from 'mongoose'
+import { body, validationResult } from 'express-validator';
 import AccountManager from './AccountManager'
 import moment from 'moment'
 import { wktUser, wktUserInterface } from './models'
@@ -14,7 +15,21 @@ const am = new AccountManager({
     jwtToken: process.env.JWT_TOKEN!
 });
 
-app.post('/auth/login', express.json(), async (req, res) => {
+const validationMiddleware = (req: express.Request, res: express.Response, next: Function) => {
+    const errors = validationResult(req);
+    const results = errors.formatWith(
+        ({param, msg}) => {
+            return `${param}: ${msg}`
+        }
+    )
+    if (!errors.isEmpty()) {
+        res.status(400).json({ status: 'error', reason: results.array().join(', ')});
+    } else {
+        next()
+    }
+}
+
+app.post('/auth/login', express.json(), body('username').isString(), body('password').isString(), validationMiddleware, async (req, res) => {
     const { username, password } = req.body
     try {
         const {jwt, doc} = await am.performAuth(username, password)
@@ -82,7 +97,7 @@ app.get('/workout', am.authMiddleware, async (req, res) => {
     }
     res.status(200).send(returnDoc)
 })
-app.post('/workout', am.authMiddleware, express.json(), async (req, res) => {
+app.post('/workout', am.authMiddleware, express.json(), body('name').isString(), body('exercises').isArray({min: 1}), validationMiddleware, async (req, res) => {
     try {
         const {name, exercises}: {name: string, exercises: {
             name: string,
@@ -106,7 +121,7 @@ app.post('/workout', am.authMiddleware, express.json(), async (req, res) => {
         res.status(500).send({status:'error',reason:e})
     }
 })
-app.delete('/workout', am.authMiddleware, express.json(), async (req, res) => {
+app.delete('/workout', am.authMiddleware, express.json(), body('name').isString(), validationMiddleware, async (req, res) => {
     try {
         const {name}: {name: string} = req.body;
         const id = req.user._id!;
@@ -127,7 +142,7 @@ app.delete('/workout', am.authMiddleware, express.json(), async (req, res) => {
     }
 })
 
-app.post('/workout/machine', am.authMiddleware, express.json(), async (req, res) => {
+app.post('/workout/machine', am.authMiddleware, express.json(), body('workout').isString(), body('machine').isObject(), validationMiddleware, async (req, res) => {
     try {
         const {workout, machine}: {workout: string, machine: {
             name: string,
@@ -144,7 +159,7 @@ app.post('/workout/machine', am.authMiddleware, express.json(), async (req, res)
         res.status(500).send({status:'error',reason:e})
     }
 })
-app.delete('/workout/machine', am.authMiddleware, express.json(), async (req, res) => {
+app.delete('/workout/machine', am.authMiddleware, express.json(), body('workout').isString(), body('machineName').isString(), validationMiddleware, async (req, res) => {
     try {
         const {workout, machineName}: {workout: string, machineName: string} = req.body;
         const id = req.user._id!;
@@ -160,42 +175,53 @@ app.delete('/workout/machine', am.authMiddleware, express.json(), async (req, re
     }
 })
 
-app.post('/action', am.authMiddleware, express.json(), async (req, res) => {
-    try {
-        const {workout, machine, weight, reps, set}: {workout: string, machine: string, weight: number, reps: number, set: number} = req.body;
-        const wktDoc = await wktUser.findOne({userId: req.user._id!})
-        if (wktDoc == null) {throw new Error('Workout Doc not found. Please set "usedWkt" to false on the user\'s meta object in MongoDB')}
-        const todaysDate = moment().format('M-D-YYYY')
-        if (!wktDoc!.lastWorkout.date || wktDoc!.lastWorkout.date != todaysDate) {
-            wktDoc.lastWorkout = {
-                date: todaysDate,
-                type: workout
+app.post(
+    '/action', 
+    am.authMiddleware, 
+    express.json(), 
+    body('workout').isString(), 
+    body('machine').isString(), 
+    body('weight').isNumeric(), 
+    body('reps').isNumeric(), 
+    body('set').isNumeric(), 
+    validationMiddleware,
+    async (req, res) => {
+        try {
+            const {workout, machine, weight, reps, set}: {workout: string, machine: string, weight: number, reps: number, set: number} = req.body;
+            const wktDoc = await wktUser.findOne({userId: req.user._id!})
+            if (wktDoc == null) {throw new Error('Workout Doc not found. Please set "usedWkt" to false on the user\'s meta object in MongoDB')}
+            const todaysDate = moment().format('M-D-YYYY')
+            if (!wktDoc!.lastWorkout.date || wktDoc!.lastWorkout.date != todaysDate) {
+                wktDoc.lastWorkout = {
+                    date: todaysDate,
+                    type: workout
+                }
+                await wktDoc.save()
             }
-            await wktDoc.save()
+            if (!wktDoc.data) {
+                wktDoc.data = {}
+                await wktDoc.save()
+            }
+            const newMachineData = {
+                weight,
+                reps,
+                set,
+                date: moment().unix()
+            }
+            if (!wktDoc.data[machine]) {
+                await wktDoc.updateOne({$set: {
+                    [`data.${machine}`]: [newMachineData]
+                }})
+            } else {
+                await wktDoc.updateOne({$addToSet: {
+                    [`data.${machine}`]: newMachineData
+                }})
+            }
+            res.status(200).send({status: 'success'})
+        } catch (e) {
+            res.status(500).send({status:'error',reason:e.toString()})
         }
-        if (!wktDoc.data) {
-            wktDoc.data = {}
-            await wktDoc.save()
-        }
-        const newMachineData = {
-            weight,
-            reps,
-            set,
-            date: moment().unix()
-        }
-        if (!wktDoc.data[machine]) {
-            await wktDoc.updateOne({$set: {
-                [`data.${machine}`]: [newMachineData]
-            }})
-        } else {
-            await wktDoc.updateOne({$addToSet: {
-                [`data.${machine}`]: newMachineData
-            }})
-        }
-        res.status(200).send({status: 'success'})
-    } catch (e) {
-        res.status(500).send({status:'error',reason:e.toString()})
     }
-})
+)
 
 app.listen(process.env.PORT, () => {console.log(`listening on ${process.env.PORT}`)})

@@ -49,7 +49,7 @@ export default class AccountManager {
             if (this._redirectFlag) {
                 res.redirect(this._redirectFlag!)
             } else {
-                res.status(401).send({
+                return res.status(401).send({
                     status: 'error',
                     reason: 'Your client is not providing a JWT in the Authorization header'
                 })
@@ -59,7 +59,7 @@ export default class AccountManager {
             udoc = JWT.verify(jwt, this._jwtToken);
         } catch (e) {
             console.error('[Error]', e)
-            res.status(401).send({
+            return res.status(401).send({
                 status: 'error',
                 reason: 'Request\'s JWT appears to be forged. Check your JWT environment variable. You may need to relaunch the server'
             })
@@ -68,7 +68,7 @@ export default class AccountManager {
             UserDoc = await User.findOne({_id: udoc.id})
         } catch (e) {
             console.error('[Error]', e)
-            res.status(500).send({
+            return res.status(500).send({
                 status: 'error',
                 reason: 'JWT is valid but could not find user with matching ID. Check log for details'
             })
