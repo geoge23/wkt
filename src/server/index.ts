@@ -3,7 +3,7 @@ import Mongoose from 'mongoose'
 import { body, validationResult } from 'express-validator';
 import AccountManager from './AccountManager'
 import moment from 'moment'
-import { wktUser, wktUserInterface } from './models'
+import { wktUser, wktUserInterface, wktAction, wktActionInterface } from './models'
 require('dotenv').config()
 
 const app = express();
@@ -198,25 +198,28 @@ app.post(
                 }
                 await wktDoc.save()
             }
-            if (!wktDoc.data) {
-                wktDoc.data = {}
-                await wktDoc.save()
+            if (wktDoc.workoutList.indexOf(workout) == -1) {
+                return res.status(400).send({
+                    status: 'error',
+                    reason: 'The workout specified does not exist'
+                })
             }
-            const newMachineData = {
+            if (!(wktDoc.workouts[workout].find(e => e.name == machine))) {
+                return res.status(400).send({
+                    status: 'error',
+                    reason: 'The machine specified does not exist'
+                })
+            }
+            const newMachineData: wktActionInterface = {
+                userId: req.user._id!,
+                machine,
                 weight,
                 reps,
                 set,
                 date: moment().unix()
             }
-            if (!wktDoc.data[machine]) {
-                await wktDoc.updateOne({$set: {
-                    [`data.${machine}`]: [newMachineData]
-                }})
-            } else {
-                await wktDoc.updateOne({$addToSet: {
-                    [`data.${machine}`]: newMachineData
-                }})
-            }
+            const wktActionDoc = new wktAction(newMachineData)
+            await wktActionDoc.save()
             res.status(200).send({status: 'success'})
         } catch (e) {
             res.status(500).send({status:'error',reason:e.toString()})

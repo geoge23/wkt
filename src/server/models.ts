@@ -24,6 +24,15 @@ export interface wktUserInterface {
     }
 }
 
+export interface wktActionInterface {
+    userId: string,
+    machine: string,
+    weight: number,
+    reps: number,
+    set: number,
+    date: number
+}
+
 const wktUserSchema = new Schema<wktUserInterface>({
     userId: {
         type: String,
@@ -35,4 +44,14 @@ const wktUserSchema = new Schema<wktUserInterface>({
     data: Object
 })
 
+const wktActionSchema = new Schema<wktActionInterface>({
+    userId: String,
+    weight: Number,
+    reps: Number,
+    set: Number,
+    date: Number,
+    machine: String
+})
+
 export const wktUser = model<wktUserInterface>('wkts', wktUserSchema)
+export const wktAction = model<wktActionInterface>('wkt-actions', wktActionSchema)
