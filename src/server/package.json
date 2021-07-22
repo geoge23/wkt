@@ -9,12 +9,15 @@
     "express-validator": "^6.12.0",
     "jsonwebtoken": "^8.5.1",
     "moment": "^2.29.1",
-    "mongoose": "^5.13.3"
+    "mongoose": "^5.13.3",
+    "typescript": "^4.3.5"
   },
   "devDependencies": {
     "ts-node-dev": "^1.1.8"
   },
   "scripts": {
-    "dev": "ts-node-dev ."
+    "dev": "ts-node-dev .",
+    "start": "node index.js",
+    "build": "tsc"
   }
 }
