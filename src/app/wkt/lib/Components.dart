@@ -17,12 +17,12 @@ class LocalAppBar extends StatelessWidget implements PreferredSizeWidget {
         ),
         Text('wkt')
       ]),
-      actions: [
-        ModalRoute.of(ctx)!.settings.name == '/'
-            ? IconButton(
-                onPressed: () => print('test'), icon: Icon(Icons.settings))
-            : Text(''),
-      ],
+      // actions: [
+      //   ModalRoute.of(ctx)!.settings.name == '/'
+      //       ? IconButton(
+      //           onPressed: () => print('test'), icon: Icon(Icons.settings))
+      //       : Text(''),
+      // ],
     );
   }
 }

@@ -39,6 +39,7 @@ class _WorkoutPageState extends State<WorkoutPage> {
   PageStorageBucket bucket;
   List<Machine> availableMachines = [];
   List<String> completedMachines = <String>[];
+  List<Widget> machineCards = [];
 
   _WorkoutPageState({required this.bucket});
 
@@ -90,16 +91,26 @@ class _WorkoutPageState extends State<WorkoutPage> {
               wktName,
               style: TextStyle(fontSize: 35, fontWeight: FontWeight.w600),
             ),
-            ...genMachineCards()
+            ...machineCards
           ],
         ),
       ),
     ));
   }
 
-  List<Widget> genMachineCards() {
+  Future<List<Widget>> genMachineCards() async {
     List<Widget> cards = [];
-    availableMachines.forEach((e) {
+    for (var e in availableMachines) {
+      var stats;
+      try {
+        stats = await Requester.makeGetRequest('/stats/machine',
+            query: {'machine': e.name});
+        if (stats['status'] == 'error') {
+          stats = null;
+        }
+      } catch (e) {
+        stats = null;
+      }
       cards.add(Card(
         child: Padding(
           padding: EdgeInsets.all(2),
@@ -108,7 +119,10 @@ class _WorkoutPageState extends State<WorkoutPage> {
               subtitle: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text('Last: 122 lbs, 6mo Average: 123 lbs'),
+                  stats != null
+                      ? Text(
+                          'Last: ${stats['last']} lbs, 6mo Average: ${stats['sixMonth']} lbs')
+                      : Text('Stats unavailable'),
                   Text(
                     '${e.sets} sets of ${e.reps} reps',
                     style: const TextStyle(fontWeight: FontWeight.w300),
@@ -143,7 +157,7 @@ class _WorkoutPageState extends State<WorkoutPage> {
                   : Icon(Icons.check_box_outline_blank)),
         ),
       ));
-    });
+    }
     return cards;
   }
 
@@ -163,15 +177,17 @@ class _WorkoutPageState extends State<WorkoutPage> {
     final workouts = await Requester.makeGetRequest('/workout');
     DateTime dt = DateTime.now();
     if (workouts!['lastWorkout'] != DateFormat('M-d-yyyy').format(dt)) {
-      print('cleared');
       bucket.writeState(context, <String>[], identifier: wktName);
     }
     availableMachines.clear();
     setState(() {
       workouts['workouts'][wktName].forEach((e) {
-        print(e);
         availableMachines.add(Machine.fromJson(e));
       });
+    });
+    final cards = await genMachineCards();
+    setState(() {
+      machineCards = cards;
     });
     context.loaderOverlay.hide();
   }

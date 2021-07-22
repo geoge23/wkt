@@ -1,6 +1,6 @@
 import express from 'express'
 import Mongoose from 'mongoose'
-import { body, validationResult } from 'express-validator';
+import { body, validationResult, query } from 'express-validator';
 import AccountManager from './AccountManager'
 import moment from 'moment'
 import { wktUser, wktUserInterface, wktAction, wktActionInterface } from './models'
@@ -227,5 +227,35 @@ app.post(
         }
     }
 )
+
+app.get('/stats/machine', am.authMiddleware, query('machine').isString(), validationMiddleware, async (req, res) => {
+    const recent = await wktAction.findOne({userId: req.user._id!, machine: req.query.machine as string}).sort({date: -1})
+    if (recent == null) {
+        return res.status(400).send({status: 'error', reason: 'Machine with that name does not exist'})
+    }
+    const unixSixMonthAgo = moment().subtract(6, 'months').unix()
+    const agg = await wktAction.aggregate(
+       [
+            {
+                $match: {
+                    userId: req.user._id!.toString(),
+                    machine: req.query.machine,
+                    date: {$gt: unixSixMonthAgo}
+                }
+            },
+            {
+                $group: {
+                    "_id":"_id",
+                    weightAvg: { $avg: "$weight" }
+                }
+            }
+       ]
+    )
+    res.status(200).send({
+        status: 'success',
+        sixMonth: Math.round(agg[0].weightAvg),
+        last: recent.weight
+    })
+})
 
 app.listen(process.env.PORT, () => {console.log(`listening on ${process.env.PORT}`)})
