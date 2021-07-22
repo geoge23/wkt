@@ -1,5 +1,7 @@
+import 'package:confirm_dialog/confirm_dialog.dart';
 import 'package:flutter/material.dart';
 import 'package:loader_overlay/loader_overlay.dart';
+import 'package:prompt_dialog/prompt_dialog.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import 'Components.dart';
@@ -13,6 +15,7 @@ class MainPage extends StatefulWidget {
 }
 
 class _MainPageState extends State<MainPage> {
+  final PageStorageBucket bucket = PageStorageBucket();
   String todaysWorkout = 'none';
   Map<String, dynamic>? availableWorkouts;
 
@@ -22,7 +25,15 @@ class _MainPageState extends State<MainPage> {
         child: Scaffold(
             appBar: LocalAppBar(),
             floatingActionButton: FloatingActionButton(
-              onPressed: () => print('test'),
+              onPressed: () async {
+                final wktNewName =
+                    await prompt(context, title: Text("Name new workout"));
+                if (wktNewName == null || !(wktNewName is String)) return;
+                await Requester.makePostRequest(
+                    '/workout', {"name": wktNewName, "exercises": []});
+                initComponent();
+                navToWktScreen(wktNewName);
+              },
               child: Icon(Icons.add),
             ),
             body: Padding(
@@ -90,7 +101,15 @@ class _MainPageState extends State<MainPage> {
             ListTile(
               title: Text(k),
               onTap: () => navToWktScreen(k),
-              onLongPress: () => print('long test'),
+              onLongPress: () async {
+                if (await confirm(context,
+                    title: Text("Are you sure you want to delete $k?"),
+                    content: Text(
+                        "Machine data will remain, but the workout cannot be recovered"))) {
+                  await Requester.makeDeleteRequest('/workout', {"name": k});
+                  initComponent();
+                }
+              },
             )
           ],
         ),
@@ -119,7 +138,6 @@ class _MainPageState extends State<MainPage> {
       todaysWorkout = wktDay['todaysWorkout'];
       availableWorkouts = wktDay['workouts'];
     });
-    print(todaysWorkout);
   }
 
   navToWktScreen(String workoutName) {

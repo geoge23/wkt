@@ -81,6 +81,7 @@ app.get('/workout', am.authMiddleware, async (req, res) => {
     const returnDoc = {
         status: 'success',
         todaysWorkout: '',
+        lastWorkout: wktDoc!.lastWorkout.date,
         workouts: wktDoc!.workouts
     }
     if (wktDoc!.lastWorkout.date == todaysDate) {
@@ -97,7 +98,7 @@ app.get('/workout', am.authMiddleware, async (req, res) => {
     }
     res.status(200).send(returnDoc)
 })
-app.post('/workout', am.authMiddleware, express.json(), body('name').isString(), body('exercises').isArray({min: 1}), validationMiddleware, async (req, res) => {
+app.post('/workout', am.authMiddleware, express.json(), body('name').isString(), body('exercises').isArray(), validationMiddleware, async (req, res) => {
     try {
         const {name, exercises}: {name: string, exercises: {
             name: string,
